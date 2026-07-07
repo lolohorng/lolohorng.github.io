@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tomato Pomodoro Timer</title>
+<link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+
+<header id="top-bar">
+  <span id="app-title">tomato timer</span>
+  <button id="settings-btn" class="icon-btn" aria-label="Settings">&#9881;</button>
+</header>
+
+<main id="timer-app">
+  <div id="timer-row">
+    <div id="timer-display">25:00</div>
+  </div>
+
+  <div id="tomato-row">
+    <div id="canvas-wrap">
+      <canvas id="three-canvas"></canvas>
+      <div id="loading">Loading tomato&hellip;</div>
+    </div>
+    <div id="dial-controls">
+      <button id="chevron-up" class="chevron-btn" aria-label="Increase time">&#9652;</button>
+      <button id="chevron-down" class="chevron-btn" aria-label="Decrease time">&#9662;</button>
+    </div>
+  </div>
+
+  <div id="controls-row">
+    <button id="play-btn" class="play-btn" aria-label="Start">&#9654;</button>
+    <button id="preset-btn" class="icon-btn" aria-label="Cycle session type to add">&#9200;</button>
+  </div>
+
+  <section id="queue-panel">
+    <h2 id="queue-heading" hidden>up next</h2>
+    <ul id="queue-list"></ul>
+    <button id="add-queue-btn" class="queue-add-btn">+ Add to queue</button>
+  </section>
+</main>
+
+<div id="settings-overlay" hidden>
+  <div id="settings-panel" role="dialog" aria-label="Settings">
+    <h2>Settings</h2>
+    <label class="settings-row">
+      <span>Pomodoro</span>
+      <input type="number" id="setting-pomodoro" min="5" max="35" step="5">
+      <span>min</span>
+    </label>
+    <label class="settings-row">
+      <span>Short break</span>
+      <input type="number" id="setting-short" min="5" max="35" step="5">
+      <span>min</span>
+    </label>
+    <label class="settings-row">
+      <span>Long break</span>
+      <input type="number" id="setting-long" min="5" max="35" step="5">
+      <span>min</span>
+    </label>
+    <button id="settings-close-btn" class="primary-pill">Done</button>
+  </div>
+</div>
+
+<script type="module" src="scripts/popup.js"></script>
+</body>
+</html>

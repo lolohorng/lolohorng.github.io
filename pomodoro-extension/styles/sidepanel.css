@@ -93,10 +93,10 @@ button {
 }
 
 #tomato-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
   width: 100%;
 }
 
@@ -130,6 +130,10 @@ button {
 }
 
 #dial-controls {
+  position: absolute;
+  left: calc(50% + 140px);
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 6px;

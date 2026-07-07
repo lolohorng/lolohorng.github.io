@@ -8,6 +8,10 @@ const DRACO_DECODER_PATH = '../vendor/three/examples/jsm/libs/draco/gltf/';
 const TYPE_LABELS = { pomodoro: 'pomodoro', 'short-break': 'short break', 'long-break': 'long break' };
 const PRESET_ORDER = ['pomodoro', 'short-break', 'long-break'];
 
+const DRAG_HANDLE_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M4 15V13H20V15H4ZM4 11V9H20V11H4Z" fill="currentColor"/>
+</svg>`;
+
 // ---- DOM ----
 const canvas = document.getElementById('three-canvas');
 const canvasWrap = document.getElementById('canvas-wrap');
@@ -16,6 +20,8 @@ const timerDisplay = document.getElementById('timer-display');
 const chevronUp = document.getElementById('chevron-up');
 const chevronDown = document.getElementById('chevron-down');
 const playBtn = document.getElementById('play-btn');
+const playIcon = document.getElementById('play-icon');
+const pauseIcon = document.getElementById('pause-icon');
 const presetBtn = document.getElementById('preset-btn');
 const queueHeading = document.getElementById('queue-heading');
 const queueList = document.getElementById('queue-list');
@@ -109,7 +115,7 @@ function renderQueue() {
 
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
-    handle.textContent = '☰';
+    handle.innerHTML = DRAG_HANDLE_SVG;
 
     const name = document.createElement('span');
     name.className = 'queue-item-name';
@@ -203,7 +209,8 @@ function clampMinutes(value, fallback) {
 
 // ---- timer controls ----
 function setRunningUI(isRunning) {
-  playBtn.textContent = isRunning ? '⏸' : '▶';
+  playIcon.classList.toggle('icon-hidden', isRunning);
+  pauseIcon.classList.toggle('icon-hidden', !isRunning);
   playBtn.setAttribute('aria-label', isRunning ? 'Pause' : 'Start');
   playBtn.classList.toggle('is-running', isRunning);
   chevronUp.disabled = isRunning;

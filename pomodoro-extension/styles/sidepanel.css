@@ -1,5 +1,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Setting the `hidden` property on SVG elements doesn't reliably reflect
+   to/from the content attribute in all browsers, so play/pause icon
+   visibility is toggled via this class instead of the hidden attribute. */
+.icon-hidden { display: none; }
+
 @font-face {
   font-family: 'Source Sans Pro';
   font-style: normal;
@@ -67,10 +72,12 @@ button {
   border: 0;
   background: transparent;
   color: var(--red);
-  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #timer-app {
@@ -170,14 +177,9 @@ button {
   height: 56px;
   background: transparent;
   color: #1a1a1a;
-  font-size: 26px;
   cursor: pointer;
   display: grid;
   place-items: center;
-}
-
-.play-btn.is-running {
-  font-size: 20px;
 }
 
 #preset-btn {
@@ -235,9 +237,10 @@ button {
 .drag-handle {
   cursor: grab;
   color: #555;
-  font-size: 15px;
   user-select: none;
   padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .queue-item-name {

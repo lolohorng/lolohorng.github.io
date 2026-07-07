@@ -213,10 +213,15 @@ button {
   padding: 10px 4px;
   border-top: 1px solid var(--divider);
   background: #f4efe4;
+  cursor: pointer;
 }
 
 .queue-item + .queue-item {
   border-top: 1px solid #e3d9c4;
+}
+
+.queue-item:hover {
+  background: #ece4d3;
 }
 
 .queue-item.dragging {

@@ -149,6 +149,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ state, remainingSeconds: getRemainingSeconds(state) });
         break;
       }
+      case 'SELECT_QUEUE_ITEM': {
+        // Jump straight to a queue item and start it now, like picking a
+        // track from a play queue: anything queued ahead of it is skipped
+        // (dropped), the current session is replaced, and whatever was
+        // queued after it stays queued.
+        const state = await applyStateChange((s) => {
+          const idx = s.queue.findIndex((q) => q.id === message.id);
+          if (idx === -1) return;
+          const [selected] = s.queue.splice(idx, 1);
+          s.queue.splice(0, idx);
+          s.current = { type: selected.type, minutes: selected.minutes };
+          s.running = true;
+          s.sessionEndTimestamp = Date.now() + selected.minutes * 60 * 1000;
+          s.pausedRemainingSeconds = selected.minutes * 60;
+        });
+        sendResponse({ state, remainingSeconds: getRemainingSeconds(state) });
+        break;
+      }
       case 'DELETE_QUEUE_ITEM': {
         const state = await applyStateChange((s) => {
           s.queue = s.queue.filter((q) => q.id !== message.id);

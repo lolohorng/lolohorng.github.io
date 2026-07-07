@@ -104,6 +104,8 @@ function renderQueue() {
     li.className = 'queue-item';
     li.draggable = true;
     li.dataset.id = item.id;
+    li.title = 'Start this session now';
+    li.addEventListener('click', () => send('SELECT_QUEUE_ITEM', { id: item.id }).then(applyIncoming));
 
     const handle = document.createElement('span');
     handle.className = 'drag-handle';
@@ -121,7 +123,10 @@ function renderQueue() {
     del.className = 'queue-item-delete';
     del.setAttribute('aria-label', 'Remove');
     del.textContent = '🗑';
-    del.addEventListener('click', () => send('DELETE_QUEUE_ITEM', { id: item.id }).then(applyIncoming));
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      send('DELETE_QUEUE_ITEM', { id: item.id }).then(applyIncoming);
+    });
 
     li.append(handle, name, duration, del);
     wireDragEvents(li);

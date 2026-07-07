@@ -85,7 +85,14 @@ function renderAll() {
   syncSettingsInputs();
   setRunningUI(state.running);
   updatePresetButton();
-  if (!state.running) syncDialToMinutes(state.current.minutes);
+  // Keep the step-reference in sync so chevrons/drag step from near
+  // wherever the tomato actually is, without moving it — the tomato's
+  // rotation itself is only ever touched by the running countdown loop,
+  // an explicit chevron/drag commit, or the one-time initial paint below.
+  if (!state.running && dialNumbers.length) {
+    currentDialIndex = nearestDialIndex(computeRemainingSeconds() / 60);
+  }
+  positionDialOnce();
 }
 
 function renderQueue() {
@@ -282,9 +289,20 @@ function commitDialIndex(index) {
   send('SET_CURRENT', { sessionType: state.current.type, minutes }).then(applyIncoming);
 }
 
-function syncDialToMinutes(minutes) {
-  if (!dialNumbers.length) return;
-  moveDialVisualOnly(nearestDialIndex(minutes));
+// Positions the tomato exactly once, the first time both the model and the
+// background's state are available. After this, rotation is only ever
+// touched by the running countdown loop or an explicit chevron/drag commit
+// — never by a routine re-render — so pausing freezes it in place instead
+// of snapping back to the session's original duration.
+let initialDialPositionSet = false;
+
+function positionDialOnce() {
+  if (initialDialPositionSet || !state || !dialNumbers.length) return;
+  const minutes = computeRemainingSeconds() / 60;
+  targetBodyRotY = rotationForMinutes(minutes);
+  bodyRotY = targetBodyRotY;
+  currentDialIndex = nearestDialIndex(minutes);
+  initialDialPositionSet = true;
 }
 
 const MODEL_ZOOM = 1.58;
@@ -340,7 +358,7 @@ loader.load(
     anglePerMinute = stepAngle() / dialStepMinutes;
 
     bodyRotY = ORIGIN_BODY_ROT_Y;
-    if (state && !state.running) syncDialToMinutes(state.current.minutes);
+    positionDialOnce();
     frameCamera(root);
     loadingEl.style.display = 'none';
   },

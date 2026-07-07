@@ -44,6 +44,8 @@ let remainingSeconds = current.minutes * 60;
 let running = false;
 let intervalId = null;
 let addPresetIndex = 0;
+let sessionStartTimestamp = 0;
+let sessionStartRemaining = 0;
 
 function persist() {
   chrome.storage?.local?.set({
@@ -208,6 +210,11 @@ function setRunningUI(isRunning) {
   chevronDown.disabled = isRunning;
 }
 
+function startSessionClock() {
+  sessionStartTimestamp = performance.now();
+  sessionStartRemaining = remainingSeconds;
+}
+
 function advanceToNextInQueue() {
   const next = queue.shift();
   if (!next) {
@@ -225,7 +232,6 @@ function advanceToNextInQueue() {
   remainingSeconds = current.minutes * 60;
   renderQueue();
   renderTimer();
-  syncDialToMinutes(current.minutes);
   persist();
 }
 
@@ -233,9 +239,10 @@ function tick() {
   remainingSeconds -= 1;
   if (remainingSeconds <= 0) {
     advanceToNextInQueue();
-    if (queue.length === 0 && !running) {
+    if (running) {
+      startSessionClock();
+    } else {
       stopInterval();
-      return;
     }
     return;
   }
@@ -248,9 +255,11 @@ playBtn.addEventListener('click', () => {
   setRunningUI(running);
   if (running) {
     if (remainingSeconds <= 0) remainingSeconds = current.minutes * 60;
+    startSessionClock();
     intervalId = setInterval(tick, 1000);
   } else {
     stopInterval();
+    updateDialIndexFromMinutes(remainingSeconds / 60);
   }
   persist();
 });
@@ -294,6 +303,7 @@ let targetBodyRotY = ORIGIN_BODY_ROT_Y;
 let bodyRotY = ORIGIN_BODY_ROT_Y;
 let dialNumbers = [];
 let currentDialIndex = 0;
+let anglePerMinute = 0;
 const DRAG_PIXELS_PER_STEP = 40;
 
 function wrapIndex(idx, len) {
@@ -302,6 +312,28 @@ function wrapIndex(idx, len) {
 
 function stepAngle() {
   return (Math.PI * 2) / dialNumbers.length;
+}
+
+function rotationForMinutes(minutes) {
+  return ORIGIN_BODY_ROT_Y + minutes * anglePerMinute;
+}
+
+function nearestDialIndex(minutes) {
+  let idx = dialNumbers.indexOf(minutes);
+  if (idx === -1) {
+    idx = dialNumbers.reduce((best, val, i) => (
+      Math.abs(val - minutes) < Math.abs(dialNumbers[best] - minutes) ? i : best
+    ), 0);
+  }
+  return idx;
+}
+
+// Updates which mark chevrons/dragging should step from, without moving the
+// tomato — used when pausing mid-countdown so the dial stays exactly where
+// it stopped instead of snapping to the nearest 5-minute mark.
+function updateDialIndexFromMinutes(minutes) {
+  if (!dialNumbers.length) return;
+  currentDialIndex = nearestDialIndex(minutes);
 }
 
 function applyDialIndex(nextIndex, { setMinutes = true } = {}) {
@@ -318,13 +350,7 @@ function applyDialIndex(nextIndex, { setMinutes = true } = {}) {
 
 function syncDialToMinutes(minutes) {
   if (!dialNumbers.length) return;
-  let idx = dialNumbers.indexOf(minutes);
-  if (idx === -1) {
-    idx = dialNumbers.reduce((best, val, i) => (
-      Math.abs(val - minutes) < Math.abs(dialNumbers[best] - minutes) ? i : best
-    ), 0);
-  }
-  applyDialIndex(idx, { setMinutes: false });
+  applyDialIndex(nearestDialIndex(minutes), { setMinutes: false });
 }
 
 const MODEL_ZOOM = 1.58;
@@ -375,6 +401,9 @@ loader.load(
 
     dialNumbers = Array.from(numericNames).sort((a, b) => a - b);
     if (dialNumbers.length === 0) dialNumbers = Array.from({ length: 12 }, (_, i) => i * 5);
+
+    const dialStepMinutes = dialNumbers[1] - dialNumbers[0];
+    anglePerMinute = stepAngle() / dialStepMinutes;
 
     bodyRotY = ORIGIN_BODY_ROT_Y;
     syncDialToMinutes(current.minutes);
@@ -439,7 +468,16 @@ chevronDown.addEventListener('click', () => applyDialIndex(currentDialIndex - 1)
 
 function animate() {
   requestAnimationFrame(animate);
-  bodyRotY += (targetBodyRotY - bodyRotY) * 0.35;
+
+  if (running && anglePerMinute) {
+    const elapsedSeconds = (performance.now() - sessionStartTimestamp) / 1000;
+    const preciseRemaining = Math.max(sessionStartRemaining - elapsedSeconds, 0);
+    targetBodyRotY = rotationForMinutes(preciseRemaining / 60);
+    bodyRotY = targetBodyRotY;
+  } else {
+    bodyRotY += (targetBodyRotY - bodyRotY) * 0.35;
+  }
+
   if (tomatoBody) tomatoBody.rotation.y = bodyRotY;
   renderer.render(scene, camera);
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tomato Pomodoro Timer",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A kitchen-timer-styled Pomodoro timer with a 3D tomato dial and a session queue.",
   "minimum_chrome_version": "114",
   "action": {
@@ -22,7 +22,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "sidePanel"],
+  "permissions": ["storage", "sidePanel", "alarms"],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   }

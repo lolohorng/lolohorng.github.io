@@ -5,11 +5,8 @@ import { DRACOLoader } from '../vendor/three/examples/jsm/loaders/DRACOLoader.js
 const MODEL_URL = '../assets/tomato19.glb';
 const DRACO_DECODER_PATH = '../vendor/three/examples/jsm/libs/draco/gltf/';
 
-const DEFAULT_SETTINGS = { pomodoro: 25, 'short-break': 5, 'long-break': 15 };
 const TYPE_LABELS = { pomodoro: 'pomodoro', 'short-break': 'short break', 'long-break': 'long break' };
 const PRESET_ORDER = ['pomodoro', 'short-break', 'long-break'];
-
-const STORAGE_KEY = 'tomatoPomodoroState';
 
 // ---- DOM ----
 const canvas = document.getElementById('three-canvas');
@@ -33,57 +30,69 @@ const settingInputs = {
 };
 
 // ---- state ----
-let settings = { ...DEFAULT_SETTINGS };
-let queue = [
-  { id: crypto.randomUUID(), type: 'short-break', minutes: 5 },
-  { id: crypto.randomUUID(), type: 'pomodoro', minutes: 25 },
-  { id: crypto.randomUUID(), type: 'short-break', minutes: 5 },
-];
-let current = { type: 'pomodoro', minutes: 25 };
-let remainingSeconds = current.minutes * 60;
-let running = false;
-let intervalId = null;
-let addPresetIndex = 0;
-let sessionStartTimestamp = 0;
-let sessionStartRemaining = 0;
+// The background service worker owns the real state (so the countdown keeps
+// running when this panel is closed). This module just mirrors the latest
+// broadcast and dispatches action messages; it never mutates state itself.
+let state = null;
+let completionPinged = false;
 
-function persist() {
-  chrome.storage?.local?.set({
-    [STORAGE_KEY]: { settings, queue, current, remainingSeconds, addPresetIndex },
-  });
+function send(type, payload = {}) {
+  return chrome.runtime.sendMessage({ type, ...payload });
 }
 
-function restore() {
-  chrome.storage?.local?.get(STORAGE_KEY, (result) => {
-    const saved = result?.[STORAGE_KEY];
-    if (!saved) return;
-    settings = { ...DEFAULT_SETTINGS, ...saved.settings };
-    if (Array.isArray(saved.queue)) queue = saved.queue;
-    if (saved.current) current = saved.current;
-    if (typeof saved.remainingSeconds === 'number') remainingSeconds = saved.remainingSeconds;
-    if (typeof saved.addPresetIndex === 'number') addPresetIndex = saved.addPresetIndex;
-    renderQueue();
-    renderTimer();
-    syncDialToMinutes(current.minutes);
-    syncSettingsInputs();
-  });
+function computeRemainingSeconds() {
+  if (!state) return 0;
+  if (!state.running) return state.pausedRemainingSeconds;
+  return Math.max((state.sessionEndTimestamp - Date.now()) / 1000, 0);
 }
+
+function applyIncoming(payload) {
+  if (!payload?.state) return;
+  state = payload.state;
+  completionPinged = false;
+  renderAll();
+}
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'STATE_UPDATED') applyIncoming(message);
+});
+
+send('GET_STATE').then(applyIncoming);
+
+setInterval(() => {
+  if (!state) return;
+  renderTimer();
+  if (state.running && computeRemainingSeconds() <= 0.05 && !completionPinged) {
+    completionPinged = true;
+    send('CHECK_COMPLETION').then(applyIncoming);
+  }
+}, 250);
 
 function formatTime(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
+  const s = Math.floor(totalSeconds) % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function renderTimer() {
-  timerDisplay.textContent = formatTime(Math.max(remainingSeconds, 0));
+  timerDisplay.textContent = formatTime(Math.max(computeRemainingSeconds(), 0));
+}
+
+function renderAll() {
+  if (!state) return;
+  renderQueue();
+  renderTimer();
+  syncSettingsInputs();
+  setRunningUI(state.running);
+  updatePresetButton();
+  if (!state.running) syncDialToMinutes(state.current.minutes);
 }
 
 function renderQueue() {
   queueList.innerHTML = '';
-  queueHeading.hidden = queue.length === 0;
+  queueHeading.hidden = state.queue.length === 0;
 
-  queue.forEach((item) => {
+  state.queue.forEach((item) => {
     const li = document.createElement('li');
     li.className = 'queue-item';
     li.draggable = true;
@@ -105,11 +114,7 @@ function renderQueue() {
     del.className = 'queue-item-delete';
     del.setAttribute('aria-label', 'Remove');
     del.textContent = '🗑';
-    del.addEventListener('click', () => {
-      queue = queue.filter((q) => q.id !== item.id);
-      renderQueue();
-      persist();
-    });
+    del.addEventListener('click', () => send('DELETE_QUEUE_ITEM', { id: item.id }).then(applyIncoming));
 
     li.append(handle, name, duration, del);
     wireDragEvents(li);
@@ -138,42 +143,28 @@ function wireDragEvents(li) {
     li.classList.remove('drag-over');
     const targetId = li.dataset.id;
     if (!dragSourceId || dragSourceId === targetId) return;
-
-    const fromIndex = queue.findIndex((q) => q.id === dragSourceId);
-    const toIndex = queue.findIndex((q) => q.id === targetId);
-    if (fromIndex === -1 || toIndex === -1) return;
-
-    const [moved] = queue.splice(fromIndex, 1);
-    queue.splice(toIndex, 0, moved);
+    send('REORDER_QUEUE', { fromId: dragSourceId, toId: targetId }).then(applyIncoming);
     dragSourceId = null;
-    renderQueue();
-    persist();
   });
 }
 
 function syncSettingsInputs() {
-  settingInputs.pomodoro.value = settings.pomodoro;
-  settingInputs['short-break'].value = settings['short-break'];
-  settingInputs['long-break'].value = settings['long-break'];
+  settingInputs.pomodoro.value = state.settings.pomodoro;
+  settingInputs['short-break'].value = state.settings['short-break'];
+  settingInputs['long-break'].value = state.settings['long-break'];
 }
 
 // ---- add to queue / presets ----
 function updatePresetButton() {
-  const type = PRESET_ORDER[addPresetIndex];
+  const type = PRESET_ORDER[state.addPresetIndex];
   presetBtn.title = `Add to queue: ${TYPE_LABELS[type]} (click to cycle)`;
 }
 
-presetBtn.addEventListener('click', () => {
-  addPresetIndex = (addPresetIndex + 1) % PRESET_ORDER.length;
-  updatePresetButton();
-  persist();
-});
+presetBtn.addEventListener('click', () => send('CYCLE_PRESET').then(applyIncoming));
 
 addQueueBtn.addEventListener('click', () => {
-  const type = PRESET_ORDER[addPresetIndex];
-  queue.push({ id: crypto.randomUUID(), type, minutes: settings[type] });
-  renderQueue();
-  persist();
+  const type = PRESET_ORDER[state.addPresetIndex];
+  send('ADD_TO_QUEUE', { sessionType: type, minutes: state.settings[type] }).then(applyIncoming);
 });
 
 // ---- settings overlay ----
@@ -183,11 +174,13 @@ settingsBtn.addEventListener('click', () => {
 });
 
 settingsCloseBtn.addEventListener('click', () => {
-  settings.pomodoro = clampMinutes(settingInputs.pomodoro.value, DEFAULT_SETTINGS.pomodoro);
-  settings['short-break'] = clampMinutes(settingInputs['short-break'].value, DEFAULT_SETTINGS['short-break']);
-  settings['long-break'] = clampMinutes(settingInputs['long-break'].value, DEFAULT_SETTINGS['long-break']);
+  const settings = {
+    pomodoro: clampMinutes(settingInputs.pomodoro.value, state.settings.pomodoro),
+    'short-break': clampMinutes(settingInputs['short-break'].value, state.settings['short-break']),
+    'long-break': clampMinutes(settingInputs['long-break'].value, state.settings['long-break']),
+  };
   settingsOverlay.hidden = true;
-  persist();
+  send('SAVE_SETTINGS', { settings }).then(applyIncoming);
 });
 
 function clampMinutes(value, fallback) {
@@ -197,11 +190,6 @@ function clampMinutes(value, fallback) {
 }
 
 // ---- timer controls ----
-function stopInterval() {
-  if (intervalId) clearInterval(intervalId);
-  intervalId = null;
-}
-
 function setRunningUI(isRunning) {
   playBtn.textContent = isRunning ? '⏸' : '▶';
   playBtn.setAttribute('aria-label', isRunning ? 'Pause' : 'Start');
@@ -210,59 +198,7 @@ function setRunningUI(isRunning) {
   chevronDown.disabled = isRunning;
 }
 
-function startSessionClock() {
-  sessionStartTimestamp = performance.now();
-  sessionStartRemaining = remainingSeconds;
-}
-
-function advanceToNextInQueue() {
-  const next = queue.shift();
-  if (!next) {
-    current = { type: current.type, minutes: settings[current.type] ?? current.minutes };
-    remainingSeconds = current.minutes * 60;
-    running = false;
-    setRunningUI(false);
-    renderQueue();
-    renderTimer();
-    syncDialToMinutes(current.minutes);
-    persist();
-    return;
-  }
-  current = { type: next.type, minutes: next.minutes };
-  remainingSeconds = current.minutes * 60;
-  renderQueue();
-  renderTimer();
-  persist();
-}
-
-function tick() {
-  remainingSeconds -= 1;
-  if (remainingSeconds <= 0) {
-    advanceToNextInQueue();
-    if (running) {
-      startSessionClock();
-    } else {
-      stopInterval();
-    }
-    return;
-  }
-  renderTimer();
-  persist();
-}
-
-playBtn.addEventListener('click', () => {
-  running = !running;
-  setRunningUI(running);
-  if (running) {
-    if (remainingSeconds <= 0) remainingSeconds = current.minutes * 60;
-    startSessionClock();
-    intervalId = setInterval(tick, 1000);
-  } else {
-    stopInterval();
-    updateDialIndexFromMinutes(remainingSeconds / 60);
-  }
-  persist();
-});
+playBtn.addEventListener('click', () => send('TOGGLE_PLAY').then(applyIncoming));
 
 // ---- three.js tomato dial ----
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -328,29 +264,27 @@ function nearestDialIndex(minutes) {
   return idx;
 }
 
-// Updates which mark chevrons/dragging should step from, without moving the
-// tomato — used when pausing mid-countdown so the dial stays exactly where
-// it stopped instead of snapping to the nearest 5-minute mark.
-function updateDialIndexFromMinutes(minutes) {
+// Moves the tomato to reflect a minutes value without notifying the
+// background — used to sync the visual dial to state we already received.
+function moveDialVisualOnly(index) {
   if (!dialNumbers.length) return;
-  currentDialIndex = nearestDialIndex(minutes);
+  currentDialIndex = wrapIndex(index, dialNumbers.length);
+  targetBodyRotY = ORIGIN_BODY_ROT_Y + currentDialIndex * stepAngle();
 }
 
-function applyDialIndex(nextIndex, { setMinutes = true } = {}) {
-  if (!dialNumbers.length) return;
-  currentDialIndex = wrapIndex(nextIndex, dialNumbers.length);
-  targetBodyRotY = ORIGIN_BODY_ROT_Y + currentDialIndex * stepAngle();
-  if (setMinutes) {
-    current.minutes = dialNumbers[currentDialIndex];
-    remainingSeconds = current.minutes * 60;
-    renderTimer();
-    persist();
-  }
+// Moves the tomato AND tells the background this is the new current
+// duration — used for chevrons/drag, which only the panel (owner of the
+// loaded GLB's dial marks) knows how to snap to a valid mark.
+function commitDialIndex(index) {
+  if (!dialNumbers.length || !state || state.running) return;
+  moveDialVisualOnly(index);
+  const minutes = dialNumbers[currentDialIndex];
+  send('SET_CURRENT', { sessionType: state.current.type, minutes }).then(applyIncoming);
 }
 
 function syncDialToMinutes(minutes) {
   if (!dialNumbers.length) return;
-  applyDialIndex(nearestDialIndex(minutes), { setMinutes: false });
+  moveDialVisualOnly(nearestDialIndex(minutes));
 }
 
 const MODEL_ZOOM = 1.58;
@@ -406,7 +340,7 @@ loader.load(
     anglePerMinute = stepAngle() / dialStepMinutes;
 
     bodyRotY = ORIGIN_BODY_ROT_Y;
-    syncDialToMinutes(current.minutes);
+    if (state && !state.running) syncDialToMinutes(state.current.minutes);
     frameCamera(root);
     loadingEl.style.display = 'none';
   },
@@ -427,7 +361,7 @@ let startY = 0;
 let startDialIndex = 0;
 
 function dragStart(y) {
-  if (!tomatoBody || running) return;
+  if (!tomatoBody || state?.running) return;
   dragging = true;
   startY = y;
   startDialIndex = currentDialIndex;
@@ -438,7 +372,9 @@ function dragMove(y) {
   if (!dragging) return;
   const dy = y - startY;
   const deltaSteps = Math.round(dy / DRAG_PIXELS_PER_STEP);
-  applyDialIndex(startDialIndex + deltaSteps);
+  const nextIndex = wrapIndex(startDialIndex + deltaSteps, dialNumbers.length);
+  if (nextIndex === currentDialIndex) return;
+  commitDialIndex(nextIndex);
 }
 
 function dragEnd() {
@@ -463,15 +399,14 @@ window.addEventListener('touchmove', (e) => {
 
 window.addEventListener('touchend', dragEnd);
 
-chevronUp.addEventListener('click', () => applyDialIndex(currentDialIndex + 1));
-chevronDown.addEventListener('click', () => applyDialIndex(currentDialIndex - 1));
+chevronUp.addEventListener('click', () => commitDialIndex(currentDialIndex + 1));
+chevronDown.addEventListener('click', () => commitDialIndex(currentDialIndex - 1));
 
 function animate() {
   requestAnimationFrame(animate);
 
-  if (running && anglePerMinute) {
-    const elapsedSeconds = (performance.now() - sessionStartTimestamp) / 1000;
-    const preciseRemaining = Math.max(sessionStartRemaining - elapsedSeconds, 0);
+  if (state?.running && anglePerMinute && state.sessionEndTimestamp) {
+    const preciseRemaining = Math.max((state.sessionEndTimestamp - Date.now()) / 1000, 0);
     targetBodyRotY = rotationForMinutes(preciseRemaining / 60);
     bodyRotY = targetBodyRotY;
   } else {
@@ -484,12 +419,6 @@ function animate() {
 animate();
 
 // ---- init ----
-updatePresetButton();
-renderQueue();
-renderTimer();
-setRunningUI(false);
-restore();
-
 const versionEl = document.getElementById('app-version');
 if (versionEl && chrome.runtime?.getManifest) {
   versionEl.textContent = `v${chrome.runtime.getManifest().version}`;

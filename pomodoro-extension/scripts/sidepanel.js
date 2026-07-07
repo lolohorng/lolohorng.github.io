@@ -489,3 +489,8 @@ renderQueue();
 renderTimer();
 setRunningUI(false);
 restore();
+
+const versionEl = document.getElementById('app-version');
+if (versionEl && chrome.runtime?.getManifest) {
+  versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+}

@@ -48,6 +48,13 @@ button {
   color: var(--muted);
 }
 
+#app-version {
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  opacity: 0.6;
+}
+
 .icon-btn {
   border: 0;
   background: transparent;

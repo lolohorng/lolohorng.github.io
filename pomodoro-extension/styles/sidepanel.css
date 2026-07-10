@@ -150,10 +150,12 @@ button {
   border: 0;
   background: transparent;
   color: var(--red);
-  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .chevron-btn:disabled {
@@ -260,9 +262,11 @@ button {
   border: 0;
   background: transparent;
   color: #555;
-  font-size: 15px;
   cursor: pointer;
   padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .queue-add-btn {

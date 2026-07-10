@@ -12,6 +12,10 @@ const DRAG_HANDLE_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="n
   <path d="M4 15V13H20V15H4ZM4 11V9H20V11H4Z" fill="currentColor"/>
 </svg>`;
 
+const DELETE_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M7 21C6.45 21 5.97917 20.8042 5.5875 20.4125C5.19583 20.0208 5 19.55 5 19V6H4V4H9V3H15V4H20V6H19V19C19 19.55 18.8042 20.0208 18.4125 20.4125C18.0208 20.8042 17.55 21 17 21H7ZM9 17H11V8H9V17ZM13 17H15V8H13V17Z" fill="currentColor"/>
+</svg>`;
+
 // ---- DOM ----
 const canvas = document.getElementById('three-canvas');
 const canvasWrap = document.getElementById('canvas-wrap');
@@ -128,7 +132,7 @@ function renderQueue() {
     const del = document.createElement('button');
     del.className = 'queue-item-delete';
     del.setAttribute('aria-label', 'Remove');
-    del.textContent = '🗑';
+    del.innerHTML = DELETE_SVG;
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       send('DELETE_QUEUE_ITEM', { id: item.id }).then(applyIncoming);

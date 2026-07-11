@@ -105,7 +105,7 @@ button {
   align-items: center;
   justify-content: center;
   width: 100%;
-  margin-top: -40px;
+  margin-top: 2px;
 }
 
 #canvas-wrap {
@@ -139,12 +139,12 @@ button {
 
 #dial-controls {
   position: absolute;
-  right: -7px;
+  right: -13px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
 }
 
 .chevron-btn {
@@ -153,7 +153,7 @@ button {
   color: var(--red);
   line-height: 1;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 2px 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -171,7 +171,7 @@ button {
   justify-content: center;
   width: 100%;
   padding: 0 0 10px;
-  margin-top: -50px;
+  margin-top: -8px;
 }
 
 .play-btn {

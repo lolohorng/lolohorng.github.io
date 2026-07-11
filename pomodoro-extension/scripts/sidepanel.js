@@ -263,7 +263,17 @@ let bodyRotY = ORIGIN_BODY_ROT_Y;
 let dialNumbers = [];
 let currentDialIndex = 0;
 let anglePerMinute = 0;
-const DRAG_PIXELS_PER_STEP = 40;
+let dialWrapMinutes = 0; // total minutes for one full rotation (marks.length * stepMinutes)
+
+// Drag speed: pixels of vertical drag per 1-minute change. Lower = faster/
+// more sensitive, higher = slower/more deliberate.
+const DRAG_PIXELS_PER_MINUTE = 8;
+
+// Dial "stickiness": fraction of the remaining distance the tomato closes
+// per animation frame when easing toward a new (non-running) position.
+// Lower = stickier/slower to settle, higher = snappier/less lag. Must be
+// between 0 (never moves) and 1 (jumps instantly, no easing).
+const DIAL_STICKINESS = 0.35;
 
 function wrapIndex(idx, len) {
   return ((idx % len) + len) % len;
@@ -296,13 +306,25 @@ function moveDialVisualOnly(index) {
 }
 
 // Moves the tomato AND tells the background this is the new current
-// duration — used for chevrons/drag, which only the panel (owner of the
-// loaded GLB's dial marks) knows how to snap to a valid mark.
+// duration — used for chevrons, which snap to the loaded GLB's labeled
+// dial marks (5-minute steps).
 function commitDialIndex(index) {
   if (!dialNumbers.length || !state || state.running) return;
   moveDialVisualOnly(index);
   const minutes = dialNumbers[currentDialIndex];
   send('SET_CURRENT', { sessionType: state.current.type, minutes }).then(applyIncoming);
+}
+
+// Same idea, but for an exact 1-minute value rather than a mark index —
+// used by dragging, which moves continuously instead of snapping between
+// the model's labeled 5-minute marks.
+function commitMinutes(minutes) {
+  if (!dialWrapMinutes || !state || state.running) return;
+  const wrapped = ((minutes % dialWrapMinutes) + dialWrapMinutes) % dialWrapMinutes;
+  targetBodyRotY = rotationForMinutes(wrapped);
+  bodyRotY = targetBodyRotY;
+  currentDialIndex = nearestDialIndex(wrapped);
+  send('SET_CURRENT', { sessionType: state.current.type, minutes: wrapped }).then(applyIncoming);
 }
 
 // Positions the tomato exactly once, the first time both the model and the
@@ -372,6 +394,7 @@ loader.load(
 
     const dialStepMinutes = dialNumbers[1] - dialNumbers[0];
     anglePerMinute = stepAngle() / dialStepMinutes;
+    dialWrapMinutes = dialNumbers.length * dialStepMinutes;
 
     bodyRotY = ORIGIN_BODY_ROT_Y;
     positionDialOnce();
@@ -392,23 +415,26 @@ loader.load(
 
 let dragging = false;
 let startY = 0;
-let startDialIndex = 0;
+let startMinutes = 0;
+let lastDragMinutes = null;
 
 function dragStart(y) {
   if (!tomatoBody || state?.running) return;
   dragging = true;
   startY = y;
-  startDialIndex = currentDialIndex;
+  startMinutes = state?.current?.minutes ?? dialNumbers[currentDialIndex] ?? 0;
+  lastDragMinutes = null;
   canvasWrap.classList.add('dragging');
 }
 
 function dragMove(y) {
-  if (!dragging) return;
+  if (!dragging || !dialWrapMinutes) return;
   const dy = y - startY;
-  const deltaSteps = Math.round(dy / DRAG_PIXELS_PER_STEP);
-  const nextIndex = wrapIndex(startDialIndex + deltaSteps, dialNumbers.length);
-  if (nextIndex === currentDialIndex) return;
-  commitDialIndex(nextIndex);
+  const deltaMinutes = Math.round(dy / DRAG_PIXELS_PER_MINUTE);
+  const wrapped = ((startMinutes + deltaMinutes) % dialWrapMinutes + dialWrapMinutes) % dialWrapMinutes;
+  if (wrapped === lastDragMinutes) return;
+  lastDragMinutes = wrapped;
+  commitMinutes(wrapped);
 }
 
 function dragEnd() {
@@ -444,7 +470,7 @@ function animate() {
     targetBodyRotY = rotationForMinutes(preciseRemaining / 60);
     bodyRotY = targetBodyRotY;
   } else {
-    bodyRotY += (targetBodyRotY - bodyRotY) * 0.35;
+    bodyRotY += (targetBodyRotY - bodyRotY) * DIAL_STICKINESS;
   }
 
   if (tomatoBody) tomatoBody.rotation.y = bodyRotY;

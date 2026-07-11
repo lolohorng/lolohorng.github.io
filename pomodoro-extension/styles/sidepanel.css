@@ -50,7 +50,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 10px 16px;
 }
 
 #app-title {
@@ -88,7 +88,7 @@ button {
 }
 
 #timer-row {
-  padding: 4px 0 8px;
+  padding: 4px 0 14px;
 }
 
 #timer-display {
@@ -138,7 +138,7 @@ button {
 
 #dial-controls {
   position: absolute;
-  left: calc(50% + 140px);
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -186,7 +186,7 @@ button {
 
 #preset-btn {
   position: absolute;
-  right: 4px;
+  right: 0;
 }
 
 #queue-panel {

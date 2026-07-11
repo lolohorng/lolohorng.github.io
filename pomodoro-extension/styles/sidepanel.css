@@ -88,7 +88,7 @@ button {
 }
 
 #timer-row {
-  padding: 4px 0 14px;
+  padding: 4px 0 8px;
 }
 
 #timer-display {
@@ -169,7 +169,7 @@ button {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 14px 0 10px;
+  padding: 8px 0 10px;
 }
 
 .play-btn {
